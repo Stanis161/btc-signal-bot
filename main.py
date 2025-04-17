@@ -12,10 +12,10 @@ last_trend = None
 def get_btc_price():
     try:
         url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-        response = requests.get(url).json()
+        response = requests.get(url, timeout=10).json()
         return float(response.get("bitcoin", {}).get("usd", 0.0))
     except Exception as e:
-        print(f"[ERROR] Не удалось получить цену BTC: {e}")
+        print(f"[ERROR] Ошибка при получении цены BTC: {e}")
         return 0.0
 
 def detect_trend(current, previous):
@@ -33,13 +33,16 @@ def trend_checker():
 
     while True:
         current_price = get_btc_price()
-        trend = detect_trend(current_price, previous_price)
+        if current_price == 0.0:
+            print("[LOG] Цена BTC не получена. Пропуск цикла.")
+            time.sleep(60)
+            continue
 
+        trend = detect_trend(current_price, previous_price)
         print(f"[LOG] Цена BTC: {current_price} | Тренд: {trend}")
 
-        if trend != last_trend and trend != "NEUTRAL" and current_price > 0:
+        if trend != last_trend and trend != "NEUTRAL":
             last_trend = trend
-
             if trend == "LONG":
                 msg = f"""⚡️ BTC Сигнал: ВХОД В ЛОНГ
 
@@ -56,7 +59,6 @@ SL: {round(current_price * 0.99, 2)}
 TP: {round(current_price * 0.98, 2)}
 SL: {round(current_price * 1.01, 2)}
 """
-
             bot.send_message(CHAT_ID, msg)
 
         previous_price = current_price
@@ -70,5 +72,8 @@ def send_welcome(message):
 def echo_all(message):
     bot.reply_to(message, message.text)
 
+# Запуск отслеживания тренда
 threading.Thread(target=trend_checker, daemon=True).start()
-bot.polling()
+
+# Запуск бота
+bot.polling(none_stop=True, interval=1, timeout=20)
