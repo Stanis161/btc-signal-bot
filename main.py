@@ -4,20 +4,19 @@ import requests
 import time
 import threading
 
-# Получаем токен и чат ID из переменных окружения
 bot = telebot.TeleBot(os.environ['TELEGRAM_BOT_TOKEN'])
 CHAT_ID = os.environ['CHAT_ID']
 
 last_trend = None
 
 def get_btc_price():
-    url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
     try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
         response = requests.get(url).json()
-        return float(response.get("bitcoin", {}).get("usd", 0))
+        return float(response.get("bitcoin", {}).get("usd", 0.0))
     except Exception as e:
-        print("[ERROR] Ошибка при получении цены BTC:", e)
-        return 0
+        print(f"[ERROR] Не удалось получить цену BTC: {e}")
+        return 0.0
 
 def detect_trend(current, previous):
     if current > previous * 1.003:
@@ -38,7 +37,7 @@ def trend_checker():
 
         print(f"[LOG] Цена BTC: {current_price} | Тренд: {trend}")
 
-        if trend != last_trend and trend != "NEUTRAL":
+        if trend != last_trend and trend != "NEUTRAL" and current_price > 0:
             last_trend = trend
 
             if trend == "LONG":
@@ -58,10 +57,7 @@ TP: {round(current_price * 0.98, 2)}
 SL: {round(current_price * 1.01, 2)}
 """
 
-            try:
-                bot.send_message(CHAT_ID, msg)
-            except Exception as e:
-                print(f"[ERROR] Ошибка при отправке сообщения: {e}")
+            bot.send_message(CHAT_ID, msg)
 
         previous_price = current_price
         time.sleep(60)
@@ -74,8 +70,5 @@ def send_welcome(message):
 def echo_all(message):
     bot.reply_to(message, message.text)
 
-# Запускаем проверку тренда в отдельном потоке
 threading.Thread(target=trend_checker, daemon=True).start()
-
-# Запускаем Telegram-бота
-bot.polling(none_stop=True)
+bot.polling()
